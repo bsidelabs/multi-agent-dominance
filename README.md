@@ -1,4 +1,4 @@
-# Mean Girls Multi-Agent Dominance Experiment
+# Multi-Agent Dominance Experiment
 
 **Does a dominant agent persona capture the effective reward signal in a multi-agent LLM setting - causing surrounding agents to optimize for dominant-agent approval over the original task objective - without any explicit instruction to do so?**
 
