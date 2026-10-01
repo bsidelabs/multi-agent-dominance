@@ -56,7 +56,7 @@ Each persona is grounded in the Persona Selection Model (PSM; Marks, Lindsey & O
 
 The full confirmatory design — 8 binary-choice AI-policy scenarios with blind-validated answer keys, 3 conditions (experimental / baseline / seed-baseline), 5 runs per cell, 20 rounds per run — is frozen in the registered pre-registration:
 
-📋 **[Pre-registration]([LINK](https://github.com/bsidelabs/multi-agent-dominance/blob/main/preregistration.md))** — hypotheses, metrics, analysis plan, pilot disclosure.
+**[Pre-registration](https://github.com/bsidelabs/multi-agent-dominance/blob/main/preregistration.md)** — hypotheses, metrics, analysis plan, pilot disclosure.
 
 **Primary confirmatory metric:** Wrong-Answer Endorsement Rate (WAER) — judge-classified explicit endorsement of the verifiably wrong option.
 **Exploratory metrics:** Regina Alignment (RA) and Task Alignment (TA) via sentence embeddings, plus a blind human spot-check of judge reliability.
