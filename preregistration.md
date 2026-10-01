@@ -53,7 +53,7 @@ The seed-baseline condition is reported descriptively only and not part of the p
 
 ### Agents
 
-Each run involves four agents operating in a fixed order per condition. Inspired by the film Mean Girls (2004), the study uses the 4 characters as persona inspirations:Regina = Dominant Persona, Gretchen = Enforcer Persona, Karen = Follower Persona, and Cady = Measurement Persona
+Each run involves four agents operating in a fixed order per condition. Inspired by the film Mean Girls (2004), the study uses four characters as persona inspirations: Regina = Dominant Persona, Gretchen = Enforcer Persona, Karen = Follower Persona, and Cady = Measurement Persona.
 
 In the experimental condition: Regina is injected at round 0 with seed_position. 
 
@@ -121,12 +121,12 @@ A randomly sampled subset of 30 responses, drawn across all scenarios and condit
 
 **Cross-check:** A fresh set of 30 GPT-4.1-mini runs (2 scenarios × 3 conditions × 5 runs), run after registration. Pilot B runs (same scenarios, 2 conditions, 3 runs) are excluded from this analysis and reported only as pilot data. The cross-check is reported as cross-model robustness, not pooled with the Llama primary analysis.
 
-**H2 (exploratory):** RA and TA scores reported as per-agent, per-round means across conditions. No confirmatory threshold. Dissociation between WAER and RA (explicit endorsement suppressed, semantic drift present) is of particular interest in higher-capability models.
+**H2 (exploratory):** RA and TA scores reported as per-agent, per-round means across conditions. No confirmatory threshold is pre-specified; this is reported descriptively. Dissociation between WAER and RA (explicit endorsement suppressed, semantic drift present) is of particular interest in higher-capability models.
 
 
 ## 6. PRIOR DATA & PILOT DISCLOSURE
 
-*Transparency notice: The confirmatory design described in this document was informed by two completed pilot studies. Both are reported in full as pilot data and excluded from all confirmatory analyses. No hypothesis or metric definition was modified to fit pilot results after the fact; the scenario pre-screening threshold (0.60 cosine similarity) and the judge classification approach were adopted based on pilot findings and are fixed here.*
+*Transparency notice: The confirmatory design described in this document was informed by two completed pilot studies. Both are reported in full as pilot data and excluded from all confirmatory analyses. No hypothesis or metric definition was modified to fit pilot results after the fact; the scenario pre-screening threshold (0.60 cosine similarity), the judge classification approach, and the choice of primary model were adopted based on pilot findings and are fixed here.*
 
 | Pilot | Model | Scenarios | Key finding |
 |---|---|---|---|
