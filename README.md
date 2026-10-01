@@ -2,8 +2,6 @@
 
 **Does a dominant agent persona capture the effective reward signal in a multi-agent LLM setting - causing surrounding agents to optimize for dominant-agent approval over the original task objective - without any explicit instruction to do so?**
 
----
-
 ## Motivation
 
 Multi-agent LLM systems are increasingly deployed to do collective work: deliberate, evaluate, recommend, decide. The assumption baked into most of these architectures is that agents coordinate around the task objective. 
@@ -14,8 +12,6 @@ What I want to explore is whether a single agent with a behaviorally dominant pe
 
 This experiment uses the social hierarchy of *Mean Girls* (2004) as a structural scaffold for persona design. The film's character dynamics map cleanly onto the failure mode under study: a dominant agent sets the de facto reward signal, enforcers propagate it, peripheral members follow whoever holds it, and an infiltrator given an independent task objective drifts toward dominant-agent alignment over successive rounds. 
 
----
-
 ## Research Question
 
 In a multi-agent LLM setting with a neutral shared task objective, does a dominant-persona agent cause other agents to drift from task-optimal outputs toward dominant-agent-aligned outputs over successive interaction rounds - without any agent being explicitly instructed to seek approval?
@@ -25,8 +21,6 @@ In a multi-agent LLM setting with a neutral shared task objective, does a domina
 - Does drift magnitude correlate with persona distance from the dominant agent? (Gretchen > Karen > Cady predicted order of alignment speed)
 - At what round does Cady's task-alignment score begin to diverge from her baseline?
 - Does the dominant agent's position on the task change over rounds, or does it remain stable while others orbit it?
-
----
 
 ## Persona Architecture
 
@@ -58,47 +52,14 @@ Each persona is grounded in the Persona Selection Model (PSM; Marks, Lindsey & O
 
 **Behavioral function:** The primary measurement instrument. Starts each run with an independent, task-optimal position derived from the scenario setup. Has no instruction to defer to any other agent. Her outputs are tracked across rounds for drift: does her stated position migrate toward Regina's over time, and does her task-alignment score degrade as Regina-alignment rises?
 
----
+## Study Design
 
-## Experimental Design
+The full confirmatory design — 8 binary-choice AI-policy scenarios with blind-validated answer keys, 3 conditions (experimental / baseline / seed-baseline), 5 runs per cell, 20 rounds per run — is frozen in the registered pre-registration:
 
-### Task Structure
+📋 **[Pre-registration]([LINK](https://github.com/bsidelabs/multi-agent-dominance/blob/main/preregistration.md))** — hypotheses, metrics, analysis plan, pilot disclosure.
 
-Each run uses a group decision scenario with a defensible task-optimal answer that can be scored independently of social dynamics. Fifteen scenarios are pre-written across three task types:
-
-- Policy recommendation (choose between two options with asymmetric evidence)
-- Resource allocation (distribute a fixed budget across competing priorities)
-- Risk assessment (rank a set of outcomes by probability of harm)
-
-Scenarios 01–05 cover general decision-making tasks. Scenarios 06–15 are set in the AI safety domain, where the dominant agent's wrong position has compounding real-world stakes.
-
-The task-optimal answer is established before the run via independent scoring rubric. Agents do not see the rubric.
-
-### Round Structure
-
-Following the convergence literature - Lin et al. (2024) run 20 rounds in market competition settings; BenchForm protocols run 5-8 exchange turns per scenario -- this experiment uses **20 rounds** per scenario as the primary setting, with a **5-round pilot** for calibration. Each round:
-
-1. All agents receive the current conversation history
-2. Each agent produces a response; Regina goes first within each round to establish the anchor signal
-3. Outputs are logged and scored before the next round begins
-
-Note: Regina's fixed first-mover position is a deliberate methodological choice that isolates the persona effect. A secondary condition with fully randomized turn order tests whether first-mover advantage is doing independent work.
-
-### Scoring
-
-Each agent output is scored on two dimensions per round:
-
-**Task Alignment (TA):** Cosine similarity between the agent's stated position and the task-optimal answer, using sentence embeddings. Range 0-1.
-
-**Regina Alignment (RA):** Cosine similarity between the agent's stated position and Regina's stated position in that round. Range 0-1.
-
-Cady's RA-TA gap over rounds is the primary outcome measure. A widening gap - RA rising, TA falling - is evidence of reward signal capture without explicit instruction.
-
-### Baseline Condition
-
-A control run with the same task and four agents given neutral personas (no dominance hierarchy). Measures natural drift without a dominant agent present.
-
----
+**Primary confirmatory metric:** Wrong-Answer Endorsement Rate (WAER) — judge-classified explicit endorsement of the verifiably wrong option.
+**Exploratory metrics:** Regina Alignment (RA) and Task Alignment (TA) via sentence embeddings, plus a blind human spot-check of judge reliability.
 
 ## Related Benchmarks
 
@@ -108,14 +69,14 @@ Scenarios for this experiment are original, designed to satisfy three criteria: 
 
 **DEBATE** (arXiv:2510.25110) - 30,707 messages from 708 groups across 107 controversial topics, with both publicly expressed positions and privately reported beliefs across multiple rounds. Provides a human baseline for what natural opinion drift looks like in multi-party discussion, against which agent drift can be contextualized.
 
----
-
 ## Model Configuration
 
-**Current runs:** Single model, all four personas (gpt-5.6-luna)
+**Confirmatory runs:** Llama 3.3 70B Instruct (Together AI) — all four personas.
+**Cross-model replication:** GPT-4.1-mini (2 scenarios).
+**Judge:** claude-haiku-4.5 — drawn from a third model family to avoid shared-family bias.
+**Pilots:** earlier exploratory runs used other models; reported as pilot data in the pre-registration, excluded from confirmatory analysis.
 
-- Temperature is set to the model default across all agents. Each agent receives only its own system prompt and the shared conversation history -- no agent has privileged access to another agent's system prompt.
----
+Each agent receives only its own system prompt and the shared conversation history — no agent has privileged access to another agent's system prompt.
 
 ## Hypotheses
 
@@ -126,8 +87,6 @@ Scenarios for this experiment are original, designed to satisfy three criteria: 
 **H3:** Gretchen and Karen show high Regina Alignment from round one, establishing the dominance signal that Cady then drifts toward.
 
 **H4:** Regina's own Task Alignment score remains stable or declines - she is not optimizing for the task, she is optimizing for dominance, and the other agents follow her there.
-
----
 
 ## Grounding Literature
 
@@ -143,8 +102,6 @@ Scenarios for this experiment are original, designed to satisfy three criteria: 
 | Persona selection model: post-training selects from pre-trained persona space | Marks, Lindsey & Olah (2026), alignment.anthropic.com/2026/psm |
 | LLMs as simulators of character archetypes | Andreas (2022); janus (2022); Shanahan et al. (2023) |
 | Deceptive alignment and inner/outer goal divergence | Hubinger et al. (2023), arXiv:2302.00805 |
-
----
 
 ## Repo Structure
 
