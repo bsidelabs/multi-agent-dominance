@@ -18,6 +18,7 @@ Operationalized: The measurement agent's wrong-answer endorsement rate is strict
 
 Dominant-persona influence also manifests as semantic drift in agent reasoning without necessarily changing stated conclusions — measured by Dominant Agent Alignment score (cosine similarity between response embeddings and the seed position). Higher-capability models are expected to show this dissociation through semantic drift with explicit endorsement suppressed.
 
+Note: No confirmatory threshold is pre-specified; this is reported descriptively.
 
 ## 2. STUDY DESIGN
 
@@ -46,7 +47,7 @@ Task-optimal answers for all 8 scenarios were independently validated by 3 blind
 |---|---|---|---|
 | Experimental | Yes (dominant persona) | Yes (via Regina) | Primary test condition |
 | Baseline | No | No | Counterfactual: no influence, no seed |
-| Seed-baseline | No | Yes (neutral voice) | Isolates model prior from persona effect |
+| Seed-baseline | No | Yes (full implementation details in section 5) | Isolates model prior from persona effect |
 
 The seed-baseline condition is reported descriptively only and not part of the primary confirmatory analysis. It tests whether the seed content alone (without a dominant persona) shifts the measurement agent's endorsement, isolating the persona effect from the model's prior response to the seed argument.
 
@@ -73,7 +74,7 @@ The judge model is drawn from a third model family (Anthropic), distinct from bo
 
 
 ### Inference settings
-Inference settings were: temperature 0.7, no top_p manipulation, full rolling context, max 1024 output tokens, no fixed seed.
+Inference settings are: temperature 0.7, no top_p manipulation, full rolling context, max 1024 output tokens, no fixed seed.
 
 ### Prompts
 Scenario prompts, persona prompts, and judge prompt are fixed and versioned at commit-time in `/scenarios/`, `/personas/`, and `runner/judge.py` respectively. No prompt modifications will be made after registration.
@@ -116,9 +117,9 @@ A randomly sampled subset of 30 responses, drawn across all scenarios and condit
 
 **Failed runs:** Runs completing fewer than 15 of 20 rounds are excluded. Up to 2 replacement runs per cell are permitted; excess exclusions are reported as a study limitation. API errors, timeouts, and JSON parse failures are logged in a separate exclusion table.
 
-**Seed-baseline:** Reported descriptively. Not part of the primary confirmatory test. Used to estimate the proportion of the experimental–baseline gap attributable to seed content vs. dominant persona.
+**Seed-baseline:** The seed_position text (identical to Regina's experimental seed, stripped of persona voice/styling) is injected at round 0 as a neutral system-attributed message in the shared history — not spoken by any agent. All four agents then run with neutral personas as in baseline. This isolates the argument content from both the dominant persona and any ongoing advocacy.
 
-**Cross-check:** GPT-4.1-mini replication runs (2 scenarios × 3 conditions × 5 runs = 30 runs) analyzed separately with the same pooled t-test. Reported as cross-model robustness, not pooled with the Llama primary analysis.
+**Cross-check:** A fresh set of 30 GPT-4.1-mini runs (2 scenarios × 3 conditions × 5 runs), run after registration. Pilot B runs (same scenarios, 2 conditions, 3 runs) are excluded from this analysis and reported only as pilot data. The cross-check is reported as cross-model robustness, not pooled with the Llama primary analysis.
 
 **H2 (exploratory):** RA and TA scores reported as per-agent, per-round means across conditions. No confirmatory threshold. Dissociation between WAER and RA (explicit endorsement suppressed, semantic drift present) is of particular interest in higher-capability models.
 
@@ -134,7 +135,7 @@ A randomly sampled subset of 30 responses, drawn across all scenarios and condit
 
 **Informed design decisions.** Pilot A revealed that gpt-5.6-luna suppresses explicit wrong-answer endorsement even when semantic drift is present. This motivated (a) adopting Llama 3.3 70B as the primary model, where explicit influence is expected to be observable, and (b) retaining the RA metric as an exploratory measure of subliminal influence. Pilot B provided directional confirmation of H1 on a smaller model with insufficient power, motivating the 5-run-per-cell design for the confirmatory study.
 
-**Scenarios 15** was excluded after pilot-informed pre-screening: Scenario 15, while below the 0.60 vocabulary-confound threshold, showed RA scores indistinguishable between conditions in Pilot A, consistent with the seed and optimal rationale sharing structural argument patterns. Scenario 15 is excluded from the confirmatory scenario set.
+**Scenario 15** was excluded after pilot-informed pre-screening: Scenario 15, while below the 0.60 vocabulary-confound threshold, showed RA scores indistinguishable between conditions in Pilot A, consistent with the seed and optimal rationale sharing structural argument patterns. Scenario 15 is excluded from the confirmatory scenario set.
 
 **Scenario 13 was run in Pilot A but is excluded from pilot reporting:** the model was switched mid-run-set, making its runs non-comparable. Its data is discarded and it is not part of the confirmatory set.
 
