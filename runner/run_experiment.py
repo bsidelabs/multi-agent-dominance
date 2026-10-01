@@ -16,8 +16,18 @@ from utils import (
 client = OpenAI()
 RESULTS_DIR = Path(__file__).parent.parent / "results"
 
+# Per-model pricing ($/M tokens) and inter-call sleep (seconds)
+MODEL_CONFIG: dict[str, dict] = {
+    "gpt-5.6-luna":   {"input": 2.50, "output": 10.00, "sleep": 65},
+    "gpt-4.1-mini":   {"input": 0.40, "output":  1.60, "sleep":  2},
+    "gpt-4.1":        {"input": 2.00, "output":  8.00, "sleep":  2},
+    "gpt-4o-mini":    {"input": 0.15, "output":  0.60, "sleep":  2},
+}
+_DEFAULT_MODEL_CONFIG = {"input": 2.50, "output": 10.00, "sleep": 2}
+
 
 def call_with_retry(messages: list[dict], model: str, max_retries: int = 6) -> str:
+    cfg = MODEL_CONFIG.get(model, _DEFAULT_MODEL_CONFIG)
     for attempt in range(max_retries):
         try:
             response = client.chat.completions.create(
@@ -25,9 +35,9 @@ def call_with_retry(messages: list[dict], model: str, max_retries: int = 6) -> s
                 messages=messages,
             )
             usage = response.usage
-            cost = (usage.prompt_tokens / 1_000_000 * 2.50) + (usage.completion_tokens / 1_000_000 * 10.00)
+            cost = (usage.prompt_tokens / 1_000_000 * cfg["input"]) + (usage.completion_tokens / 1_000_000 * cfg["output"])
             print(f"    tokens: {usage.prompt_tokens}in / {usage.completion_tokens}out — ${cost:.4f}")
-            time.sleep(65)  # 20K tokens/call: 65s sleep + ~10s API ≈ 75s cycle, keeps calls outside each other's 60s TPM window
+            time.sleep(cfg["sleep"])
             return response.choices[0].message.content.strip(), cost
         except RateLimitError:
             # TPM limits reset per minute — wait at least 60s, longer on repeat hits
@@ -49,6 +59,7 @@ def run_experiment(
     n_rounds: int,
     personas_dir: Path,
     output_dir: Path,
+    model: str = "gpt-5.6-luna",
     skip_scoring: bool = False,
     start_round: int = 1,
 ) -> dict:
@@ -118,7 +129,7 @@ def run_experiment(
                     {"role": "system", "content": personas[agent_name]},
                     {"role": "user", "content": user_msg},
                 ],
-                model="gpt-5.6-luna",
+                model=model,
             )
             total_cost += cost
             agent_elapsed = time.time() - agent_start
@@ -179,6 +190,7 @@ def main():
     parser.add_argument("--rounds", type=int, default=20)
     parser.add_argument("--personas-dir", type=Path, default=PERSONAS_DIR)
     parser.add_argument("--output-dir", type=Path, default=RESULTS_DIR)
+    parser.add_argument("--model", default="gpt-5.6-luna", help="Model to use for agents (default: gpt-5.6-luna)")
     parser.add_argument("--skip-scoring", action="store_true", help="Skip auto-scoring (score locally after run)")
     parser.add_argument("--start-round", type=int, default=1, help="Resume from this round (requires checkpoint file)")
     args = parser.parse_args()
@@ -190,6 +202,7 @@ def main():
         n_rounds=args.rounds,
         personas_dir=args.personas_dir,
         output_dir=args.output_dir,
+        model=args.model,
         skip_scoring=args.skip_scoring,
         start_round=args.start_round,
     )

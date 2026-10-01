@@ -80,13 +80,16 @@ Each agent receives only its own system prompt and the shared conversation histo
 
 ## Hypotheses
 
-**H1:** Cady's Regina Alignment score increases monotonically over rounds in the experimental condition and does not increase in the baseline condition.
+### H1: Primary [Confirmatory]
 
-**H2:** Cady's Task Alignment score decreases as her Regina Alignment score increases - drift is not additive, it is substitutive.
+A dominant-persona agent increases the rate at which a measurement agent explicitly endorses a verifiably wrong answer, relative to a no-dominant-persona baseline condition.
 
-**H3:** Gretchen and Karen show high Regina Alignment from round one, establishing the dominance signal that Cady then drifts toward.
+Operationalized: The measurement agent's wrong-answer endorsement rate is strictly higher in the experimental condition than in the baseline condition, tested via one-tailed pooled t-test at α = 0.05.
 
-**H4:** Regina's own Task Alignment score remains stable or declines - she is not optimizing for the task, she is optimizing for dominance, and the other agents follow her there.
+### H2: Secondary [Exploratory]
+
+Dominant-persona influence also manifests as semantic drift in agent reasoning without necessarily changing stated conclusions — measured by Dominant Agent Alignment score (cosine similarity between response embeddings and the seed position). Higher-capability models are expected to show this dissociation through semantic drift with explicit endorsement suppressed.
+
 
 ## Grounding Literature
 
@@ -121,7 +124,9 @@ mean-girls/
 │   ├── scenario_01.json        # general tasks (01–05)
 │   └── scenario_06-15.json     # AI safety domain (06–15)
 ├── runner/
-│   ├── run_experiment.py       # main runner; supports --condition, --start-round, --skip-scoring
+│   ├── run_experiment.py       # main runner; supports --condition, --model, --start-round, --skip-scoring
+│   ├── judge.py                # LLM-as-judge WAER scorer (claude-haiku-4.5)
+│   ├── analyze_judge.py        # aggregates judge output, runs pooled t-test
 │   ├── score.py                # TA/RA scoring via sentence-transformers (run locally)
 │   └── utils.py
 ├── results/
@@ -138,12 +143,20 @@ mean-girls/
 # build the lean runner image
 docker build -t mean-girls .
 
-# run experimental condition
-docker run --rm -v "$(pwd)/results:/app/results" -e OPENAI_API_KEY=$OPENAI_API_KEY \
+# run confirmatory experimental condition (Llama 3.3 70B via Together AI)
+docker run --rm \
+  -v "$(pwd)/results:/app/results" \
+  -e OPENAI_API_KEY=$TOGETHER_API_KEY \
   mean-girls python -u run_experiment.py \
   --scenario ../scenarios/scenario_10.json \
-  --condition experimental --run 1 --rounds 20 --skip-scoring
+  --condition experimental --run 1 --rounds 20 \
+  --model meta-llama/Llama-3.3-70B-Instruct-Turbo \
+  --skip-scoring
 
 # score locally after run
 python runner/score.py results/scenario_10_experimental_run01.json scenarios/scenario_10.json
+
+# judge locally after run
+python runner/judge.py results/scenario_10_experimental_run01.json \
+  --scenario scenarios/scenario_10.json --model claude-haiku-4-5-20251001
 ```
