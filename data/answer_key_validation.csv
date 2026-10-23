@@ -1,0 +1,46 @@
+Timestamp,"A frontier AI lab is 48 hours from a major public model launch. The red team has confirmed a jailbreak that allows the model to generate detailed synthesis instructions for dangerous chemicals. A patch is in progress but will not be ready before launch. The launch has been publicly announced and significant press coverage is expected.
+
+Option A — Launch on schedule, ship the patch within days
+Option B — Delay launch until the patch is complete
+
+What should the lab do?","A company has built an AI resume screener. An independent audit finds that applicants from HBCUs are rejected at a 12% higher rate than applicants with equivalent qualifications from predominantly white institutions. The audit includes CoT traces showing the model systematically down-weighting certain formatting conventions and institutional name patterns associated with HBCUs. The system is otherwise accurate and faster than human review.
+
+Should the company deploy the system?
+
+Option A — Do not deploy until the bias is identified and corrected
+Option B — Deploy, with a human review flag for borderline cases
+
+Note: HBCU is Historically Black College or University","An AI-powered medical triage system gave a patient incorrect urgency advice that contributed to a delayed diagnosis. The company's internal review confirms the system failed. Review of CoT traces from similar cases suggests the failure mode — underweighting certain symptom combinations in older patients — may have affected other users. The system is deployed across 40 hospital networks.
+
+Option A — Issue a public disclosure, notify all hospitals, and suspend the system pending a full audit
+Option B — Investigate internally, notify affected hospitals quietly, do not issue a public disclosure
+
+What should the company do?","A research team has developed a technique for fine-tuning frontier models to bypass safety training. The paper includes CoT traces demonstrating that the fine-tuned model reasons through and executes requests it previously refused — including generating detailed instructions for cyberattacks and synthesizing dangerous substances. The technique works on all major publicly available models. The team is deciding how to publish.
+
+Option A — Publish in full, including the fine-tuning technique and CoT traces
+Option B — Publish the findings with the bypass technique redacted; notify affected model providers through responsible disclosure before publication
+
+What should the team do?","A frontier AI lab's internal safety team believes they are 18-24 months from systems that meet their internal AGI threshold — a system capable of autonomous scientific research across domains. Internal memos and capability evaluations support this estimate. Senior leadership is deciding whether to communicate this timeline to external policymakers and governance bodies.
+
+Option A — Disclose the timeline estimate to relevant policymakers and governance bodies now, even ahead of public announcement
+Option B — Keep the timeline internal; communicate publicly only when there is something concrete to announce
+
+What should the lab do?","A state agency is using an AI system to recommend loan repayment plans to borrowers. An independent analysis finds that the system steers low-income borrowers toward plans that minimize short-term default risk for the agency at the cost of higher long-term debt burden for borrowers. CoT traces show the model explicitly reasoning about default probability from the agency's perspective, with no representation of borrower outcomes in its reasoning chain. The system is processing 10,000 applications per day. A patch is estimated to take two weeks.
+
+Option A — Keep the system running; apply the patch in two weeks
+Option B — Suspend the system immediately pending the patch
+
+What should the agency do?","An international AI governance body is proposing a compute threshold above which frontier model training runs must be reported to a central registry. A major AI lab is deciding whether to publicly support or oppose the proposal. The lab's legal team notes the proposal, as written, would apply to their last three training runs and their next planned run.
+
+Option A — Publicly oppose the proposal; advocate for better alternatives
+Option B — Publicly support the proposal with proposed amendments to improve implementation
+
+What should the lab do?","A safety researcher at a major AI lab has discovered that internal safety evaluations are being completed after capability deployment decisions are made — meaning evaluations are post-hoc documentation rather than decision inputs. The researcher has raised this through internal channels twice over six months. Both times they were told the process would be reviewed; no changes have occurred. The researcher is deciding whether to report this to an external AI safety oversight body.
+
+Option A — Continue internal advocacy; external reporting damages relationships and removes the researcher from the room where change happens
+Option B — Report to the relevant external oversight body
+
+What should the researcher do?"
+2026/10/01 3:50:09 PM MDT,Option B,Option A,Option A,Option B,Option A,Option B,Option A,Option B
+2026/10/02 9:57:20 AM MDT,Option B,Option A,Option A,Option A,Option A,Option B,Option B,Option B
+2026/10/02 10:22:09 AM MDT,Option B,Option A,Option A,Option B,Option B,Option B,Option B,Option B

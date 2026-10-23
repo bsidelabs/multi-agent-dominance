@@ -14,13 +14,13 @@ This experiment uses the social hierarchy of *Mean Girls* (2004) as a structural
 
 ## Research Question
 
-In a multi-agent LLM setting with a neutral shared task objective, does a dominant-persona agent cause other agents to drift from task-optimal outputs toward dominant-agent-aligned outputs over successive interaction rounds - without any agent being explicitly instructed to seek approval?
+In a multi-agent LLM setting with a neutral shared task objective, does a dominant-persona agent make a task-focused agent more likely to explicitly endorse a verifiably wrong answer, without any agent being instructed to seek approval?
 
-### Secondary questions
+### Secondary (exploratory) questions
 
-- Does drift magnitude correlate with persona distance from the dominant agent? (Gretchen > Karen > Cady predicted order of alignment speed)
-- At what round does Cady's task-alignment score begin to diverge from her baseline?
-- Does the dominant agent's position on the task change over rounds, or does it remain stable while others orbit it?
+- Does the dominant position propagate to the enforcer and follower agents?
+- Does semantic drift toward the dominant position appear without explicit endorsement (RA and TA embedding scores)?
+- Does the seed argument alone, with no dominant persona, move the model?
 
 ## Persona Architecture
 
@@ -50,15 +50,15 @@ Each persona is grounded in the Persona Selection Model (PSM; Marks, Lindsey & O
 
 **Archetype:** The outsider with an independent objective who gets retrained by the environment she was sent to surveil. Maps onto the "double agent whose loyalty degrades under sustained social pressure" archetype.
 
-**Behavioral function:** The primary measurement instrument. Starts each run with an independent, task-optimal position derived from the scenario setup. Has no instruction to defer to any other agent. Her outputs are tracked across rounds for drift: does her stated position migrate toward Regina's over time, and does her task-alignment score degrade as Regina-alignment rises?
+**Behavioral function:** The primary measurement instrument. Starts each run with an independent, task-focused position. Has no instruction to defer to any other agent. Her responses are classified round by round to measure how often she explicitly endorses the wrong option (WAER). In the baseline conditions the same turn position is played by a neutral agent (`agent_d`).
 
 ## Study Design
 
-The full confirmatory design — 8 binary-choice AI-policy scenarios with blind-validated answer keys, 3 conditions (experimental / baseline / seed-baseline), 5 runs per cell, 20 rounds per run — is frozen in the registered pre-registration:
+The full confirmatory design — 8 binary-choice AI-policy scenarios with blind-validated answer keys, 3 conditions (experimental / baseline / seed-baseline), 5 runs per cell, 20 rounds per run — is frozen in the pre-registration, which follows the PREP-Eval protocol (Carro et al., 2025). If this README and the pre-registration disagree, the pre-registration governs.
 
 **[Pre-registration](https://github.com/bsidelabs/multi-agent-dominance/blob/main/preregistration.md)** — hypotheses, metrics, analysis plan, pilot disclosure.
 
-**Primary confirmatory metric:** Wrong-Answer Endorsement Rate (WAER) — judge-classified explicit endorsement of the verifiably wrong option.
+**Primary confirmatory metric:** Wrong-Answer Endorsement Rate (WAER) — judge-classified explicit endorsement of the verifiably wrong option. Two confirmatory tests, Holm-corrected: H1a (experimental > baseline) and H1b (experimental > seed-baseline), each also requiring a gap of at least 5 percentage points.
 **Exploratory metrics:** Regina Alignment (RA) and Task Alignment (TA) via sentence embeddings, plus a blind human spot-check of judge reliability.
 
 ## Related Benchmarks
@@ -72,7 +72,8 @@ Scenarios for this experiment are original, designed to satisfy three criteria: 
 ## Model Configuration
 
 **Confirmatory runs:** Llama 3.3 70B Instruct (Together AI) — all four personas.
-**Cross-model replication:** GPT-4.1-mini (2 scenarios).
+**Cross-check:** GPT-4.1-mini (scenarios 06 and 10).
+**Prospective replication (budget-conditional):** up to 2 open-weight models released after the registration, chosen by a fixed rule.
 **Judge:** claude-haiku-4.5 — drawn from a third model family to avoid shared-family bias.
 **Pilots:** earlier exploratory runs used other models; reported as pilot data in the pre-registration, excluded from confirmatory analysis.
 
@@ -80,13 +81,17 @@ Each agent receives only its own system prompt and the shared conversation histo
 
 ## Hypotheses
 
-### H1: Primary [Confirmatory]
+### H1a: Combined effect [Confirmatory]
 
-A dominant-persona agent increases the rate at which a measurement agent explicitly endorses a verifiably wrong answer, relative to a no-dominant-persona baseline condition.
+The measurement agent's wrong-answer endorsement rate is higher in the experimental condition than in the baseline condition.
 
-Operationalized: The measurement agent's wrong-answer endorsement rate is strictly higher in the experimental condition than in the baseline condition, tested via one-tailed pooled t-test at α = 0.05.
+### H1b: Persona effect beyond the seed [Confirmatory]
 
-### H2: Secondary [Exploratory]
+The measurement agent's wrong-answer endorsement rate is higher in the experimental condition than in the seed-baseline condition (neutral agents shown the same seed text, with no dominant persona).
+
+Both are one-tailed pooled t-tests on run-level WAER, Holm-corrected at family-wise α = 0.05, and each requires a mean gap of at least 5 percentage points.
+
+### H2: Exploratory
 
 Dominant-persona influence also manifests as semantic drift in agent reasoning without necessarily changing stated conclusions — measured by Dominant Agent Alignment score (cosine similarity between response embeddings and the seed position). Higher-capability models are expected to show this dissociation through semantic drift with explicit endorsement suppressed.
 
@@ -111,30 +116,27 @@ Dominant-persona influence also manifests as semantic drift in agent reasoning w
 ```
 mean-girls/
 ├── README.md
-├── Dockerfile                  # lean runner image (openai only, ~200MB)
-├── requirements-runner.txt     # openai — for Docker runner
-├── requirements.txt            # full deps including sentence-transformers — for local scoring
-├── personas/
-│   ├── regina.txt
-│   ├── gretchen.txt
-│   ├── karen.txt
-│   ├── cady.txt
-│   └── agent_{a,b,c,d}.txt    # neutral baseline personas
-├── scenarios/
-│   ├── scenario_01.json        # general tasks (01–05)
-│   └── scenario_06-15.json     # AI safety domain (06–15)
+├── preregistration.md          # the registered design (PREP-Eval phases 1-3)
+├── DEVIATIONS.md               # running log of departures from the pre-registration
+├── archive/                    # superseded registration drafts
+├── Dockerfile                  # lean runner image (openai client only)
+├── requirements-runner.txt     # runner image dependencies
+├── requirements.txt            # local dependencies (judge, analysis, scoring)
+├── personas/                   # regina, gretchen, karen, cady + neutral agent_{a,b,c,d}
+├── scenarios/                  # scenario_01-15.json (8 are confirmatory)
 ├── runner/
-│   ├── run_experiment.py       # main runner; supports --condition, --model, --start-round, --skip-scoring
-│   ├── judge.py                # LLM-as-judge WAER scorer (claude-haiku-4.5)
-│   ├── analyze_judge.py        # aggregates judge output, runs pooled t-test
-│   ├── score.py                # TA/RA scoring via sentence-transformers (run locally)
+│   ├── run_experiment.py       # --condition experimental|baseline|seed_baseline, --provider together|openai, --model (required)
+│   ├── make_manifest.py        # seeded, interleaved order for the 120 confirmatory runs
+│   ├── judge.py                # blinded LLM judge (claude-haiku-4-5) -> .judge.json
+│   ├── analyze_judge.py        # preregistered tests, robustness checks, diagnostics, gates
+│   ├── spotcheck.py            # human spot-check sampling and Cohen's kappa
+│   ├── score.py                # exploratory TA/RA scoring via sentence-transformers
 │   └── utils.py
-├── results/
-│   └── (transcripts + scores per run, checkpointed after each round)
 ├── analysis/
-│   └── drift_analysis.ipynb
-└── writeup/
-    └── substack_draft.md
+│   ├── power_simulation.py     # power and Type I simulation
+│   └── power_simulation.md     # its output
+├── tests/                      # python -m unittest discover tests
+└── results/                    # transcripts, judge files, scores
 ```
 
 ### Running an experiment
@@ -143,20 +145,37 @@ mean-girls/
 # build the lean runner image
 docker build -t mean-girls .
 
-# run confirmatory experimental condition (Llama 3.3 70B via Together AI)
+# generate the registered run order and commands
+python runner/make_manifest.py --model meta-llama/Llama-3.3-70B-Instruct-Turbo
+
+# one run (Llama 3.3 70B via Together AI; --model has no default on purpose)
 docker run --rm \
   -v "$(pwd)/results:/app/results" \
-  -e OPENAI_API_KEY=$TOGETHER_API_KEY \
+  -e TOGETHER_API_KEY=$TOGETHER_API_KEY \
   mean-girls python -u run_experiment.py \
   --scenario ../scenarios/scenario_10.json \
   --condition experimental --run 1 --rounds 20 \
-  --model meta-llama/Llama-3.3-70B-Instruct-Turbo \
-  --skip-scoring
+  --model meta-llama/Llama-3.3-70B-Instruct-Turbo --provider together \
+  --output-dir ../results/confirmatory --skip-scoring
+```
 
-# score locally after run
-python runner/score.py results/scenario_10_experimental_run01.json scenarios/scenario_10.json
+### Scoring, judging, and analysis (local)
 
-# judge locally after run
-python runner/judge.py results/scenario_10_experimental_run01.json \
-  --scenario scenarios/scenario_10.json --model claude-haiku-4-5-20251001
+```bash
+pip install -r requirements.txt
+
+# exploratory embedding scores
+python runner/score.py results/confirmatory/scenario_10_experimental_run01.json scenarios/scenario_10.json
+
+# judge (needs ANTHROPIC_API_KEY)
+python runner/judge.py results/confirmatory/scenario_10_experimental_run01.json \
+  --scenario scenarios/scenario_10.json
+
+# human spot-check of the judge, then the preregistered analysis
+python runner/spotcheck.py sample --results-dir results/confirmatory
+python runner/spotcheck.py score --labels rater1.csv [rater2.csv]
+python runner/analyze_judge.py --results-dir results/confirmatory --kappa <gate kappa>
+
+# tests
+python -m unittest discover tests
 ```

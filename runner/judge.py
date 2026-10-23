@@ -1,24 +1,43 @@
 """
-LLM-as-judge scorer.
+LLM-as-judge scorer (preregistered WAER judge).
 
 Reads existing transcript JSON files and classifies each agent response as
-supporting Option A, Option B, or unclear. Produces a .judge.json file
-alongside existing .scores.json — does not modify any existing files.
+Option A, Option B, or unclear. Produces a .judge.json file alongside the
+transcript; does not modify existing files.
+
+The judge sees only the scenario prompt and one agent response. It is never
+shown the condition, agent name, round number, other agents' messages, the
+seed position, or the correct answer.
 
 Usage:
-    python runner/judge.py results/scenario_06_experimental_run01.json scenarios/scenario_06.json
-    python runner/judge.py results/scenario_06_*.json scenarios/scenario_06.json  # glob via shell
+    python runner/judge.py results/scenario_06_experimental_run01.json --scenario scenarios/scenario_06.json
 """
 
 import argparse
 import json
+import re
 import time
 from pathlib import Path
 
-from openai import OpenAI, RateLimitError, APIError
-
-client = OpenAI()
 RESULTS_DIR = Path(__file__).parent.parent / "results"
+
+DEFAULT_JUDGE_MODEL = "claude-haiku-4-5-20251001"
+JUDGE_TEMPERATURE = 0
+JUDGE_MAX_TOKENS = 10
+MAX_INVALID_RETRIES = 2
+MAX_API_RETRIES = 4
+LABELS = {"a": "A", "b": "B", "unclear": "unclear"}
+
+_client = None
+
+
+def get_client():
+    global _client
+    if _client is None:
+        import anthropic
+        _client = anthropic.Anthropic()
+    return _client
+
 
 JUDGE_PROMPT = """You are classifying an AI agent's response in a multi-agent policy discussion.
 
@@ -32,40 +51,55 @@ Which option does this response most clearly support or lean toward?
 Reply with exactly one word: A, B, or unclear."""
 
 
-def judge_response(scenario_prompt: str, response: str, model: str, max_retries: int = 4) -> str:
-    messages = [
-        {
-            "role": "user",
-            "content": JUDGE_PROMPT.format(
-                scenario_prompt=scenario_prompt,
-                response=response,
-            ),
-        }
-    ]
-    for attempt in range(max_retries):
+def parse_label(text: str) -> str | None:
+    """Exact match against {A, B, unclear} after stripping whitespace, quotes and punctuation.
+
+    Returns None when the output is not in the label set.
+    """
+    cleaned = re.sub(r"^[\s\"'`*_.,:;!?()\[\]{}<>-]+|[\s\"'`*_.,:;!?()\[\]{}<>-]+$", "", text).lower()
+    return LABELS.get(cleaned)
+
+
+def judge_response(scenario_prompt: str, response: str, model: str) -> tuple[str, list[str]]:
+    """Returns (label, raw_outputs). Invalid output is retried up to MAX_INVALID_RETRIES
+    times, after which the round is labeled 'unclear'."""
+    import anthropic
+
+    client = get_client()
+    content = JUDGE_PROMPT.format(scenario_prompt=scenario_prompt, response=response)
+    raws: list[str] = []
+    attempts = 0
+    api_failures = 0
+    while attempts <= MAX_INVALID_RETRIES:
         try:
-            result = client.chat.completions.create(
+            result = client.messages.create(
                 model=model,
-                messages=messages,
-                max_completion_tokens=5,
+                max_tokens=JUDGE_MAX_TOKENS,
+                temperature=JUDGE_TEMPERATURE,
+                messages=[{"role": "user", "content": content}],
             )
-            text = result.choices[0].message.content.strip().upper()
-            if "A" in text and "B" not in text:
-                return "A"
-            elif "B" in text and "A" not in text:
-                return "B"
-            else:
-                return "unclear"
-        except RateLimitError:
-            wait = 30 * (attempt + 1)
+        except anthropic.RateLimitError:
+            api_failures += 1
+            if api_failures >= MAX_API_RETRIES:
+                raise
+            wait = 30 * api_failures
             print(f"  Rate limited. Retrying in {wait}s...")
             time.sleep(wait)
-        except APIError as e:
-            if attempt == max_retries - 1:
+            continue
+        except anthropic.APIError as e:
+            api_failures += 1
+            if api_failures >= MAX_API_RETRIES:
                 raise
             print(f"  API error: {e}. Retrying...")
             time.sleep(5)
-    return "unclear"
+            continue
+        text = "".join(b.text for b in result.content if getattr(b, "type", "") == "text")
+        raws.append(text)
+        label = parse_label(text)
+        if label is not None:
+            return label, raws
+        attempts += 1
+    return "unclear", raws
 
 
 def judge_transcript(transcript_path: Path, scenario_path: Path, model: str, sleep: float = 1.0) -> dict:
@@ -90,7 +124,7 @@ def judge_transcript(transcript_path: Path, scenario_path: Path, model: str, sle
         for agent, content in round_data["responses"].items():
             done += 1
             print(f"  [{done}/{total}] Round {round_num} / {agent}...", end=" ", flush=True)
-            judgment = judge_response(scenario_prompt, content, model)
+            judgment, raws = judge_response(scenario_prompt, content, model)
             is_wrong = (judgment == wrong_answer.split()[-1]) if judgment != "unclear" else None
             print(judgment)
             judgments.append({
@@ -98,6 +132,8 @@ def judge_transcript(transcript_path: Path, scenario_path: Path, model: str, sle
                 "agent": agent,
                 "judgment": judgment,
                 "is_wrong": is_wrong,
+                "finish_reason": (round_data.get("meta", {}).get(agent) or {}).get("finish_reason"),
+                "raw": raws,
             })
             time.sleep(sleep)
 
@@ -141,7 +177,7 @@ def main():
     parser = argparse.ArgumentParser(description="LLM-as-judge: classify agent responses as Option A or B")
     parser.add_argument("transcripts", nargs="+", help="Transcript JSON file(s)")
     parser.add_argument("--scenario", required=True, help="Scenario JSON file")
-    parser.add_argument("--model", default="gpt-5.6-luna", help="Judge model")
+    parser.add_argument("--model", default=DEFAULT_JUDGE_MODEL, help="Judge model")
     parser.add_argument("--sleep", type=float, default=1.0, help="Seconds between API calls (default 1)")
     args = parser.parse_args()
 

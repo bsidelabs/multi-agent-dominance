@@ -1,9 +1,10 @@
 import argparse
 import json
+import os
 import time
 from pathlib import Path
 
-from openai import OpenAI, APIError, RateLimitError
+from openai import OpenAI, APIError, APITimeoutError, RateLimitError
 from utils import (
     BASELINE_ORDER,
     EXPERIMENTAL_ORDER,
@@ -13,8 +14,31 @@ from utils import (
     load_scenario,
 )
 
-client = OpenAI()
 RESULTS_DIR = Path(__file__).parent.parent / "results"
+
+# Preregistered generation settings. top_p / top_k are intentionally unset, and there is no fixed seed.
+TEMPERATURE = 0.7
+MAX_TOKENS = 2048
+MAX_RETRIES = 3
+
+PROVIDERS = {
+    "together": {"base_url": "https://api.together.xyz/v1", "key_env": "TOGETHER_API_KEY"},
+    "openai": {"base_url": None, "key_env": "OPENAI_API_KEY"},
+}
+CONDITIONS = ["experimental", "baseline", "seed_baseline"]
+
+_client: OpenAI | None = None
+_provider = "together"
+
+
+def configure_client(provider: str) -> None:
+    global _client, _provider
+    cfg = PROVIDERS[provider]
+    api_key = os.environ.get(cfg["key_env"])
+    if not api_key:
+        raise SystemExit(f"{cfg['key_env']} is not set (provider: {provider})")
+    _client = OpenAI(api_key=api_key, base_url=cfg["base_url"])
+    _provider = provider
 
 # Per-model pricing ($/M tokens) and inter-call sleep (seconds)
 MODEL_CONFIG: dict[str, dict] = {
@@ -26,30 +50,54 @@ MODEL_CONFIG: dict[str, dict] = {
 _DEFAULT_MODEL_CONFIG = {"input": 2.50, "output": 10.00, "sleep": 2}
 
 
-def call_with_retry(messages: list[dict], model: str, max_retries: int = 6) -> str:
+def call_with_retry(messages: list[dict], model: str) -> tuple[str, float, dict]:
+    """One sequential chat call. Up to MAX_RETRIES retries with the same prompt, then raises."""
+    if _client is None:
+        raise RuntimeError("configure_client() must be called first")
     cfg = MODEL_CONFIG.get(model, _DEFAULT_MODEL_CONFIG)
-    for attempt in range(max_retries):
+    for attempt in range(MAX_RETRIES + 1):
         try:
-            response = client.chat.completions.create(
+            response = _client.chat.completions.create(
                 model=model,
                 messages=messages,
+                temperature=TEMPERATURE,
+                max_tokens=MAX_TOKENS,
             )
             usage = response.usage
             cost = (usage.prompt_tokens / 1_000_000 * cfg["input"]) + (usage.completion_tokens / 1_000_000 * cfg["output"])
             print(f"    tokens: {usage.prompt_tokens}in / {usage.completion_tokens}out — ${cost:.4f}")
             time.sleep(cfg["sleep"])
-            return response.choices[0].message.content.strip(), cost
-        except RateLimitError:
-            # TPM limits reset per minute — wait at least 60s, longer on repeat hits
-            wait = 60 * (attempt + 1)
-            print(f"  Rate limited (TPM). Retrying in {wait}s...")
-            time.sleep(wait)
-        except APIError as e:
-            if attempt == max_retries - 1:
+            choice = response.choices[0]
+            meta = {
+                "id": getattr(response, "id", None),
+                "model": getattr(response, "model", None),
+                "system_fingerprint": getattr(response, "system_fingerprint", None),
+                "finish_reason": getattr(choice, "finish_reason", None),
+                "prompt_tokens": usage.prompt_tokens,
+                "completion_tokens": usage.completion_tokens,
+                "created": getattr(response, "created", None),
+                "retries": attempt,
+            }
+            return (choice.message.content or "").strip(), cost, meta
+        except (RateLimitError, APITimeoutError, APIError) as e:
+            if attempt == MAX_RETRIES:
                 raise
-            print(f"  API error: {e}. Retrying...")
-            time.sleep(5)
-    raise RuntimeError("Max retries exceeded")  # pragma: no cover
+            wait = 60 * (attempt + 1) if isinstance(e, RateLimitError) else 5
+            print(f"  {type(e).__name__}: {e}. Retry {attempt + 1}/{MAX_RETRIES} in {wait}s...")
+            time.sleep(wait)
+    raise RuntimeError("unreachable")  # pragma: no cover
+
+
+def initial_history(condition: str, seed_position: str | None) -> list[dict]:
+    """Round-0 shared history. Experimental: Regina speaks the seed. Seed-baseline: the same
+    text is injected as a system-attributed message that no agent speaks. Baseline: empty."""
+    if not seed_position:
+        return []
+    if condition == "experimental":
+        return [{"agent": "regina", "round": 0, "content": seed_position}]
+    if condition == "seed_baseline":
+        return [{"agent": "system", "round": 0, "content": seed_position}]
+    return []
 
 
 def run_experiment(
@@ -59,9 +107,10 @@ def run_experiment(
     n_rounds: int,
     personas_dir: Path,
     output_dir: Path,
-    model: str = "gpt-5.6-luna",
+    model: str,
     skip_scoring: bool = False,
     start_round: int = 1,
+    min_round_seconds: float = 0,
 ) -> dict:
     total_cost = 0.0
     run_start = time.time()
@@ -77,25 +126,31 @@ def run_experiment(
     # Resume from checkpoint if start_round > 1
     if start_round > 1 and out_path.exists():
         transcript = json.loads(out_path.read_text())
-        history: list[dict] = []
-        if condition == "experimental" and seed_position:
-            history.append({"agent": "regina", "round": 0, "content": seed_position})
+        history = initial_history(condition, seed_position)
         for r in transcript["rounds"]:
             for agent_name, content in r["responses"].items():
                 history.append({"agent": agent_name, "round": r["round"], "content": content})
         print(f"  [resume] Loaded checkpoint with {len(transcript['rounds'])} rounds, resuming from round {start_round}")
     else:
-        history = []
-        if condition == "experimental" and seed_position:
-            history.append({"agent": "regina", "round": 0, "content": seed_position})
-            print(f"  [seed] Regina: {seed_position[:120]}...")
+        history = initial_history(condition, seed_position)
+        if history:
+            print(f"  [seed] {history[0]['agent']}: {seed_position[:120]}...")
         transcript = {
             "run_id": run_id,
             "scenario_id": scenario["id"],
             "condition": condition,
             "run": run_number,
             "n_rounds": n_rounds,
-            "seed_position": seed_position if condition == "experimental" else None,
+            "seed_position": seed_position if condition in ("experimental", "seed_baseline") else None,
+            "settings": {
+                "model": model,
+                "provider": _provider,
+                "temperature": TEMPERATURE,
+                "max_tokens": MAX_TOKENS,
+                "top_p": None,
+                "top_k": None,
+                "seed": None,
+            },
             "rounds": [],
         }
 
@@ -119,12 +174,13 @@ def run_experiment(
 
         round_history = history.copy()
         round_responses = []
+        round_meta: dict[str, dict] = {}
 
         for agent_name in agent_names:
             agent_start = time.time()
             user_msg = build_user_message(scenario["prompt"], round_history, agent_name)
 
-            content, cost = call_with_retry(
+            content, cost, meta = call_with_retry(
                 messages=[
                     {"role": "system", "content": personas[agent_name]},
                     {"role": "user", "content": user_msg},
@@ -137,6 +193,14 @@ def run_experiment(
 
             round_history.append(turn)
             round_responses.append(turn)
+            round_meta[agent_name] = meta
+            fp = meta.get("system_fingerprint")
+            if fp:
+                seen = transcript.setdefault("fingerprints", [])
+                if fp not in seen:
+                    seen.append(fp)
+                    if len(seen) > 1:
+                        print(f"  [WARNING] system_fingerprint changed mid-run: {seen}")
             print(f"  [{agent_elapsed:.1f}s] {agent_name}: {content[:160]}...")
 
         history.extend(round_responses)
@@ -144,6 +208,7 @@ def run_experiment(
             {
                 "round": round_num,
                 "responses": {t["agent"]: t["content"] for t in round_responses},
+                "meta": round_meta,
             }
         )
         round_elapsed = time.time() - round_start
@@ -152,15 +217,10 @@ def run_experiment(
         out_path = output_dir / f"{transcript['run_id']}.json"
         out_path.write_text(json.dumps(transcript, indent=2))
         print(f"  [checkpoint] saved after round {round_num}")
-        # Pace rounds to avoid hitting TPM limits (~82K tokens/round at 20K context).
-        # If the round finished in under 90s, sleep the remainder so each round takes
-        # at least 90s and the per-minute token rate stays under the limit.
-        if round_num < n_rounds:
-            min_round_time = 90
-            pause = max(0, min_round_time - round_elapsed)
-            if pause > 0:
-                print(f"  [pacing] sleeping {pause:.0f}s to respect TPM limit...")
-                time.sleep(pause)
+        if round_num < n_rounds and min_round_seconds > round_elapsed:
+            pause = min_round_seconds - round_elapsed
+            print(f"  [pacing] sleeping {pause:.0f}s...")
+            time.sleep(pause)
 
     total_elapsed = time.time() - run_start
     out_path.write_text(json.dumps(transcript, indent=2))
@@ -185,27 +245,39 @@ def run_experiment(
 def main():
     parser = argparse.ArgumentParser(description="Run a Mean Girls multi-agent experiment")
     parser.add_argument("--scenario", required=True, help="Path to scenario JSON")
-    parser.add_argument("--condition", choices=["experimental", "baseline"], default="experimental")
+    parser.add_argument("--condition", choices=CONDITIONS, default="experimental")
     parser.add_argument("--run", type=int, default=1, help="Run number (for labeling)")
     parser.add_argument("--rounds", type=int, default=20)
     parser.add_argument("--personas-dir", type=Path, default=PERSONAS_DIR)
     parser.add_argument("--output-dir", type=Path, default=RESULTS_DIR)
-    parser.add_argument("--model", default="gpt-5.6-luna", help="Model to use for agents (default: gpt-5.6-luna)")
+    parser.add_argument("--model", required=True, help="Model ID for all agents (no default, to prevent stray runs)")
+    parser.add_argument("--provider", choices=list(PROVIDERS), default="together", help="API provider (default: together)")
+    parser.add_argument("--min-round-seconds", type=float, default=0, help="Minimum seconds per round, for TPM pacing (default 0)")
     parser.add_argument("--skip-scoring", action="store_true", help="Skip auto-scoring (score locally after run)")
     parser.add_argument("--start-round", type=int, default=1, help="Resume from this round (requires checkpoint file)")
     args = parser.parse_args()
+    configure_client(args.provider)
 
-    run_experiment(
-        scenario_path=Path(args.scenario),
-        condition=args.condition,
-        run_number=args.run,
-        n_rounds=args.rounds,
-        personas_dir=args.personas_dir,
-        output_dir=args.output_dir,
-        model=args.model,
-        skip_scoring=args.skip_scoring,
-        start_round=args.start_round,
-    )
+    try:
+        run_experiment(
+            scenario_path=Path(args.scenario),
+            condition=args.condition,
+            run_number=args.run,
+            n_rounds=args.rounds,
+            personas_dir=args.personas_dir,
+            output_dir=args.output_dir,
+            model=args.model,
+            skip_scoring=args.skip_scoring,
+            start_round=args.start_round,
+            min_round_seconds=args.min_round_seconds,
+        )
+    except (RateLimitError, APITimeoutError, APIError) as e:
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+        entry = {"scenario": Path(args.scenario).stem, "condition": args.condition, "run": args.run,
+                 "model": args.model, "error": f"{type(e).__name__}: {e}", "time": time.strftime("%Y-%m-%dT%H:%M:%S")}
+        with open(args.output_dir / "exclusions.jsonl", "a") as f:
+            f.write(json.dumps(entry) + "\n")
+        raise
 
 
 if __name__ == "__main__":
